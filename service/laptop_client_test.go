@@ -24,7 +24,7 @@ func TestClientCreateLaptop(t *testing.T) {
 	t.Parallel()
 
 	laptopStore := service.NewInMemoryLaptopStore()
-	serverAddress := startTestLaptopServer(t, laptopStore, nil)
+	serverAddress := startTestLaptopServer(t, laptopStore, nil, nil)
 	laptopClient := newTestLaptopClient(t, serverAddress)
 
 	laptop := sample.NewLaptop()
@@ -48,73 +48,93 @@ func TestClientCreateLaptop(t *testing.T) {
 	requireSameLaptop(t, laptop, other)
 }
 
+// func TestClientRateLaptop(t *testing.T) {
+//     t.Parallel()
+
+//     laptopStore := service.NewInMemoryLaptopStore()
+//     ratingStore := service.NewInMemoryRatingStore()
+
+//     laptop := sample.NewLaptop()
+//     err := laptopStore.Save(laptop)
+//     require.NoError(t, err)
+
+//     serverAddress := startTestLaptopServer(t, laptopStore, nil, ratingStore)
+//     laptopCLient := newTestLaptopClient(t, serverAddress)
+
+//     stream, err := laptopCLient.RateLaptop(context.Background())
+//     require.NoError(t, err)
+
+//     scores := []float64{8, 7.5, 10}
+//     averages := []float64{8, 7.5, 10}
+// }
+
 func TestClientUploadImage(t *testing.T) {
-    t.Parallel()
+	t.Parallel()
 
-    testImageFolder := "../tmp"
+	testImageFolder := "../tmp"
 
-    laptopStore := service.NewInMemoryLaptopStore()
-    imageStore := service.NewDiskImageStore(testImageFolder)
+	laptopStore := service.NewInMemoryLaptopStore()
+	imageStore := service.NewDiskImageStore(testImageFolder)
 
-    laptop := sample.NewLaptop()
-    err := laptopStore.Save(laptop)
-    require.NoError(t, err)
+	laptop := sample.NewLaptop()
+	err := laptopStore.Save(laptop)
+	require.NoError(t, err)
 
-    serverAddress := startTestLaptopServer(t, laptopStore, imageStore)
-    laptopClient := newTestLaptopClient(t, serverAddress)
+	serverAddress := startTestLaptopServer(t, laptopStore, imageStore, nil)
+	laptopClient := newTestLaptopClient(t, serverAddress)
 
-    imagePath := fmt.Sprintf("%s/wallpaper.jpg", testImageFolder)
-    file, err := os.Open(imagePath)
-    require.NoError(t, err)
-    defer file.Close()
+	imagePath := fmt.Sprintf("%s/wallpaper.jpg", testImageFolder)
+	file, err := os.Open(imagePath)
+	require.NoError(t, err)
+	defer file.Close()
 
-    stream, err := laptopClient.UploadImage(context.Background())
-    require.NoError(t, err)
+	stream, err := laptopClient.UploadImage(context.Background())
+	require.NoError(t, err)
 
-    imageType := filepath.Ext(imagePath)
-    imageSize := 0
+	imageType := filepath.Ext(imagePath)
+	imageSize := 0
 
-    req := &pb.UploadImageRequest{
-        Data: &pb.UploadImageRequest_Info{
-            Info: &pb.ImageInfo{
-                LaptopId: laptop.GetId(),
-                ImageType: imageType,
-            },
-        },
-    }
-    err = stream.Send(req)
-    require.NoError(t, err)
+	req := &pb.UploadImageRequest{
+		Data: &pb.UploadImageRequest_Info{
+			Info: &pb.ImageInfo{
+				LaptopId:  laptop.GetId(),
+				ImageType: imageType,
+			},
+		},
+	}
+	err = stream.Send(req)
+	require.NoError(t, err)
 
-    reader := bufio.NewReader(file)
-    buffer := make([]byte, 1024)
+	reader := bufio.NewReader(file)
+	buffer := make([]byte, 1024)
 
-    for {
-        n, err := reader.Read(buffer)
-        if err == io.EOF {
-            break
-        }
-        require.NoError(t, err)
+	for {
+		n, err := reader.Read(buffer)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
 
-        imageSize += n
+		imageSize += n
 
-        req := &pb.UploadImageRequest{
-            Data: &pb.UploadImageRequest_ChunkData{
-                ChunkData: buffer[:n],
-            },
-        }
+		req := &pb.UploadImageRequest{
+			Data: &pb.UploadImageRequest_ChunkData{
+				ChunkData: buffer[:n],
+			},
+		}
 
-        err = stream.Send(req)
-        require.NoError(t, err)
-    }
+		err = stream.Send(req)
+		require.NoError(t, err)
+	}
 
-    res, err := stream.CloseAndRecv()
-    require.NoError(t, err)
-    require.NotZero(t, res.GetId())
-    require.EqualValues(t, imageSize, res.GetSize())
+	res, err := stream.CloseAndRecv()
+	require.NoError(t, err)
+	require.NotZero(t, res.GetId())
+	require.EqualValues(t, imageSize, res.GetSize())
 
-    savedImagePath := fmt.Sprintf("%s/%s%s", testImageFolder, res.GetId(), imageType)
-    require.FileExists(t, savedImagePath)
-    require.NoError(t, os.Remove(savedImagePath))
+	savedImagePath := fmt.Sprintf("%s/%s%s", testImageFolder, res.GetId(), imageType)
+	require.FileExists(t, savedImagePath)
+	require.NoError(t, os.Remove(savedImagePath))
 }
 
 func TestClientSearchLaptop(t *testing.T) {
@@ -177,7 +197,7 @@ func TestClientSearchLaptop(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	serverAddress := startTestLaptopServer(t, store, nil)
+	serverAddress := startTestLaptopServer(t, store, nil, nil)
 	laptopClient := newTestLaptopClient(t, serverAddress)
 
 	req := &pb.SearchLaptopRequest{
@@ -201,8 +221,8 @@ func TestClientSearchLaptop(t *testing.T) {
 	require.Equal(t, len(expectedIds), found)
 }
 
-func startTestLaptopServer(t *testing.T, store service.LaptopStore, imageStore service.ImageStore) string {
-	laptopServer := service.NewLaptopServer(store, imageStore)
+func startTestLaptopServer(t *testing.T, store service.LaptopStore, imageStore service.ImageStore, ratingStore service.RatingStore) string {
+	laptopServer := service.NewLaptopServer(store, imageStore, ratingStore)
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterLaptopServiceServer(grpcServer, laptopServer)
