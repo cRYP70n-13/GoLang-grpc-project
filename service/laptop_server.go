@@ -23,11 +23,12 @@ type LaptopServer struct {
 	pb.UnimplementedLaptopServiceServer
 	LaptopStore LaptopStore
 	ImageStore  ImageStore
+	RatingStore RatingStore
 }
 
 // NewLaptopServer creates a new laptop server instance and returns it
-func NewLaptopServer(laptopStore LaptopStore, imageStore ImageStore) *LaptopServer {
-	return &LaptopServer{LaptopStore: laptopStore, ImageStore: imageStore}
+func NewLaptopServer(laptopStore LaptopStore, imageStore ImageStore, ratingStore RatingStore) *LaptopServer {
+	return &LaptopServer{LaptopStore: laptopStore, ImageStore: imageStore, RatingStore: ratingStore}
 }
 
 // CreateLaptop is a unary RPC to create a new laptop
@@ -174,9 +175,53 @@ func (server *LaptopServer) UploadImage(stream pb.LaptopService_UploadImageServe
 
 // RateLaptop is a bidirectional-streaming RPC that allows client to create a stream of laptops
 // with a score, and returns a stream of average score for each of them.
-// func (s *LaptopServer) RateLaptop(stream pb.LaptopService_RateLaptopServer) error {
-// 	return nil
-// }
+func (s *LaptopServer) RateLaptop(stream pb.LaptopService_RateLaptopServer) error {
+	for {
+		if err := checkContextError(stream.Context()); err != nil {
+			return err
+		}
+
+		req, err := stream.Recv()
+		if err == io.EOF {
+			log.Print("no more data")
+			break
+		}
+		if err != nil {
+			return logError(status.Errorf(codes.Unknown, "cannot receive stream request: %v", err))
+		}
+
+		laptopID := req.GetLaptopId()
+		score := req.GetScore()
+
+		log.Printf("received a rate-laptop request: id = %s, score = %.2f", laptopID, score)
+
+		found, err := s.LaptopStore.Find(laptopID)
+		if err != nil {
+			return logError(status.Errorf(codes.Internal, "cannot find laptop: %v", err))
+		}
+		if found == nil {
+			return logError(status.Errorf(codes.NotFound, "laptop %s is not found", laptopID))
+		}
+
+		rating, err := s.RatingStore.Add(laptopID, score)
+		if err != nil {
+			return logError(status.Errorf(codes.Internal, "cannot create laptop rating: %v", err))
+		}
+
+		res := &pb.RateLaptopResponse{
+			LaptopId:     laptopID,
+			RatedCount:   rating.Count,
+			AverageScore: rating.Sum / float64(rating.Count),
+		}
+
+		err = stream.Send(res)
+		if err != nil {
+			return logError(status.Errorf(codes.Unknown, "cannot send stream response: %v", err))
+		}
+	}
+
+	return nil
+}
 
 func checkContextError(ctx context.Context) error {
 	switch ctx.Err() {

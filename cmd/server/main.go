@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+
 	"otmane/pcbook/pb"
 	"otmane/pcbook/service"
 
@@ -12,14 +13,15 @@ import (
 )
 
 func main() {
-	port := flag.Int("port", 0, "the server port")
+	port := flag.Int("port", 5050, "the server port")
 	flag.Parse()
 	log.Printf("Start server on port: %d", *port)
 
 	laptopStore := service.NewInMemoryLaptopStore()
 	imageStore := service.NewDiskImageStore("img")
+	ratingStore := service.NewInMemoryRatingStore()
 
-	laptopServer := service.NewLaptopServer(laptopStore, imageStore)
+	laptopServer := service.NewLaptopServer(laptopStore, imageStore, ratingStore)
 	grpcServer := grpc.NewServer()
 	pb.RegisterLaptopServiceServer(grpcServer, laptopServer)
 
