@@ -30,7 +30,7 @@ type ImageInfo struct {
 }
 
 // NewDiskImageStore returns a new DiskImageStore
-func NewDiskImageStore(imageFolder string) *DiskImageStore {
+func NewDiskImageStore(imageFolder string) ImageStore {
 	return &DiskImageStore{
 		imageFolder: imageFolder,
 		images:      make(map[string]*ImageInfo),

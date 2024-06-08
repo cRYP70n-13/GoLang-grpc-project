@@ -14,6 +14,7 @@ import (
 
 // ErrAlreadyExists is returned when a record with the same ID already exists in the store
 var ErrAlreadyExists = errors.New("record already exists")
+var ErrNotFound = errors.New("record not found")
 
 // LaptopStore is an interface to store laptop
 type LaptopStore interface {
