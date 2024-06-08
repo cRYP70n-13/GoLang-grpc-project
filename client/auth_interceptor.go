@@ -35,13 +35,13 @@ func NewAuthInterceptor(
 
 func (interceptor *AuthInterceptor) Unary() grpc.UnaryClientInterceptor {
 	return func(
-        ctx context.Context,
-        method string,
-        req, reply any,
-        cc *grpc.ClientConn,
-        invoker grpc.UnaryInvoker,
-        opts ...grpc.CallOption,
-    ) error {
+		ctx context.Context,
+		method string,
+		req, reply any,
+		cc *grpc.ClientConn,
+		invoker grpc.UnaryInvoker,
+		opts ...grpc.CallOption,
+	) error {
 		log.Printf("---> unary interceptor: %s", method)
 		if interceptor.authMethods[method] {
 			return invoker(interceptor.attachToken(ctx), method, req, reply, cc, opts...)
@@ -73,7 +73,6 @@ func (interceptor *AuthInterceptor) attachToken(ctx context.Context) context.Con
 	return metadata.AppendToOutgoingContext(ctx, "authorization", interceptor.accessToken)
 }
 
-// TODO: Check if this function is doing what we really need.
 func (interceptor *AuthInterceptor) scheduleRefreshToken(refreshDuration time.Duration) error {
 	err := interceptor.refreshToken()
 	if err != nil {

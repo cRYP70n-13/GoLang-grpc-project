@@ -49,8 +49,9 @@ func accessibleRoles() map[string][]string {
 
 func main() {
 	port := flag.Int("port", 5050, "the server port")
+	enableTls := flag.Bool("tls", false, "enable SSL/TLS")
 	flag.Parse()
-	log.Printf("Start server on port: %d", *port)
+	log.Printf("Start server on port: %d, TLS = %t", *port, *enableTls)
 
 	laptopStore := service.NewInMemoryLaptopStore()
 	imageStore := service.NewDiskImageStore("img")
@@ -63,16 +64,18 @@ func main() {
 		panic(err)
 	}
 
+	interceptor := service.NewAuthInterceptor(jwtManager, accessibleRoles())
+	serverOptions := []grpc.ServerOption{
+		grpc.UnaryInterceptor(interceptor.Unary()),
+		grpc.StreamInterceptor(interceptor.Stream()),
+	}
+
+	grpcServer := grpc.NewServer(serverOptions...)
+
 	authServer := service.NewAuthServer(userStore, *jwtManager)
 
 	laptopServer := service.NewLaptopServer(laptopStore, imageStore, ratingStore)
 
-	interceptor := service.NewAuthInterceptor(jwtManager, accessibleRoles())
-
-	grpcServer := grpc.NewServer(
-		grpc.UnaryInterceptor(interceptor.Unary()),
-		grpc.StreamInterceptor(interceptor.Stream()),
-	)
 	pb.RegisterLaptopServiceServer(grpcServer, laptopServer)
 	pb.RegisterAuthServiceServer(grpcServer, authServer)
 
