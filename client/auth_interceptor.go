@@ -80,6 +80,8 @@ func (interceptor *AuthInterceptor) scheduleRefreshToken(refreshDuration time.Du
 	}
 
 	ticker := time.NewTicker(refreshDuration)
+    defer ticker.Stop()
+
 	go func() {
 		for range ticker.C {
 			_ = interceptor.refreshToken()
